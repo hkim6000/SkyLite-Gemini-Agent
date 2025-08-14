@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkyLite AI Code Assistant</title>
+  <link rel="stylesheet" href="index.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.sh/@google/genai@^0.7.0"
+      }
+    }
+  </script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+  <main id="app">
+    <header>
+      <h1>SkyLite AI Code Assistant</h1>
+      <p>Your intelligent partner for generating, explaining, and refactoring code.</p>
+    </header>
+    <div class="prompt-container">
+      <textarea id="prompt-input" placeholder="e.g., Create a C# SkyLite page with a button. When clicked, it should use ApiResponse.PopUpWindow to show a 'Hello World' message." rows="4"></textarea>
+      
+      <div id="image-preview-container" hidden>
+        <img id="image-preview" alt="Image preview"/>
+        <button id="clear-image-button" aria-label="Clear attached image">&times;</button>
+      </div>
+
+      <div class="prompt-actions">
+        <button id="attach-file-button" aria-label="Attach an image file">Attach Image</button>
+        <input type="file" id="file-input" hidden accept="image/*" />
+        <button id="generate-button" aria-label="Generate code based on the prompt">Generate Code</button>
+      </div>
+    </div>
+    <div id="output-container" aria-live="polite">
+      <pre><code id="output-code"></code></pre>
+      <div class="loading-indicator" id="loading-indicator" hidden></div>
+    </div>
+  </main>
+  <script type="module" src="index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

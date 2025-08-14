@@ -1,0 +1,5 @@
+{
+  "name": "SkyLite AI Code Assistant",
+  "description": "An intelligent coding assistant powered by Gemini. Helps you write, explain, and refactor code for the SkyLite framework.",
+  "requestFramePermissions": []
+}
