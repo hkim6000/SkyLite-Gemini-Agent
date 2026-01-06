@@ -12,13 +12,12 @@ const loadingIndicator = document.getElementById('loading-indicator') as HTMLDiv
 const outputContainer = document.getElementById('output-container') as HTMLDivElement;
 const attachFileButton = document.getElementById('attach-file-button') as HTMLButtonElement;
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
-const imagePreviewContainer = document.getElementById('image-preview-container') as HTMLDivElement;
-const imagePreview = document.getElementById('image-preview') as HTMLImageElement;
-const clearImageButton = document.getElementById('clear-image-button') as HTMLButtonElement;
+const filePreviewContainer = document.getElementById('file-preview-container') as HTMLDivElement;
+
 
 // --- State Management ---
 let isLoading = false;
-let uploadedImage: { mimeType: string; data: string; } | null = null;
+let uploadedFiles: { mimeType: string; data: string; name: string; }[] = [];
 
 // --- Gemini AI Initialization ---
 // The API key is sourced from the environment variable `process.env.API_KEY`.
@@ -62,7 +61,6 @@ const setLoading = (loading: boolean) => {
   isLoading = loading;
   generateButton.disabled = loading;
   attachFileButton.disabled = loading;
-  clearImageButton.disabled = loading;
   if (loading) {
     loadingIndicator.hidden = false;
     outputCode.textContent = ''; // Clear previous output
@@ -83,14 +81,73 @@ const displayError = (message: string) => {
 };
 
 /**
+ * Renders the file previews in the UI.
+ */
+const renderFilePreviews = () => {
+    filePreviewContainer.innerHTML = ''; // Clear existing previews
+    if (uploadedFiles.length === 0) {
+        filePreviewContainer.hidden = true;
+        return;
+    }
+
+    filePreviewContainer.hidden = false;
+    uploadedFiles.forEach((file, index) => {
+        const pill = document.createElement('div');
+        pill.className = 'file-preview-pill';
+
+        const thumbnail = document.createElement('div');
+        thumbnail.className = 'file-preview-thumbnail';
+
+        if (file.mimeType.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.src = `data:${file.mimeType};base64,${file.data}`;
+            img.alt = file.name;
+            thumbnail.appendChild(img);
+        } else {
+            // Generic file icon for non-images
+            thumbnail.innerHTML = `<svg class="file-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path d="M0 64C0 28.7 28.7 0 64 0H224V128c0 17.7 14.3 32 32 32H384V448c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V64zm384 64H256V0L384 64z"/></svg>`;
+        }
+
+        const fileName = document.createElement('span');
+        fileName.className = 'file-name';
+        fileName.textContent = file.name;
+
+        const removeButton = document.createElement('button');
+        removeButton.className = 'remove-file-button';
+        removeButton.innerHTML = '&times;';
+        removeButton.setAttribute('aria-label', `Remove ${file.name}`);
+        removeButton.onclick = (e) => {
+            e.stopPropagation();
+            removeFile(index);
+        };
+
+        pill.appendChild(thumbnail);
+        pill.appendChild(fileName);
+        pill.appendChild(removeButton);
+        filePreviewContainer.appendChild(pill);
+    });
+};
+
+/**
+ * Removes a file from the uploaded list and updates the UI.
+ * @param {number} index - The index of the file to remove.
+ */
+const removeFile = (index: number) => {
+    uploadedFiles.splice(index, 1);
+    fileInput.value = ''; // Reset file input to allow re-adding the same file
+    renderFilePreviews();
+};
+
+
+/**
  * Main function to generate code using the Gemini API.
  */
 const generateCode = async () => {
   if (isLoading) return;
 
   const prompt = promptInput.value.trim();
-  if (!prompt && !uploadedImage) {
-    displayError('Please enter a prompt or attach an image.');
+  if (!prompt && uploadedFiles.length === 0) {
+    displayError('Please enter a prompt or attach a file.');
     return;
   }
 
@@ -120,13 +177,23 @@ Key Features and Capabilities:
 
 **1. Core Application & Request Handling**
 *   'skylite.WebPage': The foundational class from which all server-side page logic must inherit. It orchestrates the entire request lifecycle (OnLoad, OnInitialized, OnRequest, OnResponse) and contains the public methods that act as endpoints for client-side API calls.
-*   'skylite.WebPage.HtmlDocument': The master object for building the final HTML response during a GET request. It manages the content of both the '<body>' and '<head>' sections, providing methods like 'AddJsFile' and 'AddCSSFile' for linking external resources and an 'InitialScripts' property for queuing JavaScript to be executed immediately upon page load.
+*   'skylite.WebPage.HtmlDocument': The master object for building the final HTML response during a GET request. It manages the content of both the '<body>' and '<head>' sections. Key methods include 'SetTitle(titleString)', 'AddJsFile(path)', 'AddCSSFile(path)', and 'AddCSSScript(cssString)' for injecting an inline CSS block into the document head. It also has an 'InitialScripts' property for queuing JavaScript to be executed immediately upon page load, which includes methods like 'CenteringElement(elementId)' to center an element on load and 'ExecuteScript(jsString)'. **Body Content:** To set the main content for the page during a GET request (within 'OnInitialized'), you **MUST** assign the rendered HTML of your main UI container control to the 'HtmlDoc.HtmlBodyText' property. Do not use methods like 'BodyContents.Add' for the primary page structure. **Important:** SkyLite automatically includes a CSS and JS file if they share the same base name as the webpage class (e.g., 'LoginPage.cs' automatically includes 'loginpage.css' and 'loginpage.js' if they exist). Do not call 'AddJsFile' or 'AddCSSFile' for these auto-included files. **Custom Styling:** When the user requests custom styling, you MUST generate the CSS content and explicitly state that it should be placed in this auto-included CSS file (e.g., for 'MyPage.vb', the styles go in 'mypage.css'). You must avoid using inline styles ('SetStyle') for static page design; reserve them for dynamic, server-driven style changes.
 *   'skylite.ApiResponse': A command-based object that serves as the return type for all API functions (POST requests). It does not return data directly, but rather a collection of commands to be executed on the client. This list of commands (e.g., 'SetElementContents', 'Navigate', 'PopUpWindow', 'TableToggleRow') is serialized to JSON, sent to the client, and processed by SkyLite's built-in JavaScript library to perform real-time DOM manipulations and other actions without a full page refresh.
 
 **2. UI Toolkit (skylite.ToolKit)**
 A comprehensive suite of server-side UI controls for rapid web page construction. Controls are object-oriented wrappers that abstract away the complexity of writing raw HTML. Each control generates its corresponding HTML structure when its 'HtmlText()' method is called.
 *   **Basic Input Controls:**
-    *   'skylite.ToolKit.Texts': A server-side UI control that generates an HTML '<input>' element for single-line text entry, along with an associated '<label>'. It is a composite object that provides access to the inner '<input>' tag via the 'Text' property and the '<label>' tag via the 'Label' property, allowing for granular styling and attribute setting. The type of the input (e.g., text, password, email, date) is specified by passing a 'TextTypes' enum value to the constructor. The control's 'Alignment' property can arrange the label and input field either vertically or horizontally.
+    *   'skylite.ToolKit.Texts': A server-side UI control that generates an HTML '<input>' element for single-line text entry, along with an associated '<label>'. It is a composite object with specific rules for instantiation and attribute setting.
+        *   **Constructor (MANDATORY):** It MUST be instantiated with the two-argument constructor: \\\`New Texts(labelText As String, textType As String)\\\`.
+        *   **Input Type:** The 'textType' parameter MUST be a string constant from the 'TextTypes' structure (e.g., 'TextTypes.text', 'TextTypes.password').
+        *   **Name Attribute (MANDATORY):** The 'name' attribute is critical for form submissions and MUST be set manually on the inner 'Text' property: \\\`myInput.Text.SetAttribute(HtmlAttributes.name, "controlName")\\\`.
+        *   **Composite Properties for Attributes:**
+            *   To set attributes on the underlying **'<input>' element**, you MUST access its 'Text' property (e.g., \\\`myInput.Text.SetAttribute(HtmlAttributes.placeholder, "...")\\\`).
+            *   To set attributes on the **'<label>' element**, you MUST access its 'Label' property.
+            *   To set attributes on the **'<div>' that wraps the label**, you MUST access its 'LabelWrap' property.
+        *   **Other Key Properties:**
+            *   '.Required = True' marks the field as mandatory.
+            *   The 'Alignment' property accepts a value from the 'skylite.ToolKit.Alignments' enum. The default alignment is vertical, so you **MUST OMIT** setting \\\`.Alignment = Alignments.Vertical\\\` as it is redundant.
     *   'skylite.ToolKit.TextArea': A composite control that generates a '<textarea>' element for multi-line text input. It includes an 'HtmlTag' for the main '<textarea>' element itself (accessible via the 'Text' property) as well as an associated label. This structure allows for independent styling and attribute setting on both the label and the input area. It is the standard control for capturing larger blocks of user text like comments or descriptions.
     *   'skylite.ToolKit.Dropdown': A composite control that generates a '<select>' element. The list of '<option>' tags is managed by a separate 'OptionValues' helper class, which is then assigned to the Dropdown control's 'SelOptions' property. The core '<select>' tag is accessed via the 'SelBox' property to set attributes like 'id' or 'onchange'.
     *   'skylite.ToolKit.CheckBox': Generates a group of one or more '<input type="checkbox">' elements. It allows for multiple selections from a list of options defined in an 'OptionValues' object assigned to the '.Checks' property. The client-side script must gather all checked values into a single payload for the server.
@@ -165,8 +232,8 @@ A comprehensive suite of server-side UI controls for rapid web page construction
     *   'skylite.ToolKit.TreeView': A server-side UI control that generates a hierarchical, tree-like structure for displaying nested data. It is ideal for representing organizational charts or multi-level navigation menus. It relies on a built-in JavaScript library that must be included via 'HtmlDoc.AddJsFile(WebEnv.HeaderScripts.TreeScript)'. The data for the tree is provided as a 'List(Of TreeView.TreeItem)' assigned to the 'TreeItems' property. Each 'TreeItem' object defines a node and the hierarchy is established by setting the 'ParentId' of a child item to the 'Id' of its parent. Interactivity is enabled by setting a JavaScript function name to the 'TreeItemClick' property.
     *   'skylite.ToolKit.TreeView2': An advanced, multi-column hierarchical tree. Unlike 'TreeView', each node is a row with multiple, distinct sub-items (columns), making it ideal for complex structured data. It also requires the 'TreeScript'. The tree's data is defined by a 'List(Of TreeView2.TreeItem)'. Each 'TreeItem' represents a main node, and its columns are populated by adding 'HtmlTag' objects to its 'SubItems' collection. Interactivity can be set for the main item ('TreeItemClick') or sub-items ('TreeSubItemClick').
 *   **Specialized & Display Controls:**
-    *   'skylite.ToolKit.Label': A fundamental control for displaying static, non-interactive text. It is a composite control that renders a text element (like a '<span>') inside a '<div>' wrapper. The outer '<div>' is accessed via the 'Wrap' property, which is essential for setting an ID to allow the label's content to be dynamically updated from the server via 'ApiResponse' commands.
-    *   'skylite.ToolKit.Title': A composite control that generates a structured page title. It encapsulates several 'HtmlTag' objects: a 'LogoImage', a main 'Caption', and a 'Page' element (for subtitles). This allows for detailed, independent styling of each component. The entire control is enclosed in a main 'Wrap' '<div>', making it easy to create consistent and branded page headers.
+    *   'skylite.ToolKit.Label': A fundamental control, often instantiated with \\\`New Label(initialText)\\\`, for displaying static, non-interactive text. It is a composite control that renders a text element (like a '<span>') inside a '<div>' wrapper. The outer '<div>' is accessed via the 'Wrap' property, which is essential for setting an ID or applying styles to allow the label's content to be dynamically updated from the server via 'ApiResponse' commands.
+    *   'skylite.ToolKit.Title': A composite control that generates a structured page title. **It must be instantiated with its default constructor: \\\`New Title()\\\`.** It encapsulates several 'HtmlTag' objects: a 'LogoImage', a main 'Caption', and a 'Page' element (for subtitles). The text for these elements must be set via their 'InnerText' property (e.g., 'myTitle.Caption.InnerText = "My Title"'). CSS classes must be added using 'SetAttribute' (e.g., 'myTitle.Caption.SetAttribute(HtmlAttributes.class, "my-class")'). The entire control is enclosed in a main 'Wrap' '<div>', making it easy to create consistent and branded page headers.
     *   'skylite.ToolKit.TitleBox': A composite control for creating styled section headers. It encapsulates a 'LogoImage', a main text 'Title' ('Label'), and a 'ContentsWrap' ('HtmlTag') for additional content like action buttons. This provides a standard way to build a header with a title on the left and buttons on the right.
     *   'skylite.ToolKit.TitleSection': A composite control that generates a styled header or title bar for a webpage. It encapsulates a 'LogoImage', a main 'Caption', and a main 'Wrap'. Its primary method, 'AddContents(String)', appends raw HTML (often from another control's '.HtmlText()') to the main body of the section, typically positioned next to the title. This makes it well-suited for creating page headers that include a logo, title, and other elements like a navigation menu.
     *   'skylite.ToolKit.TitleSection2': A high-level, composite control for generating a comprehensive and modern application header. It encapsulates several specialized child controls: a 'Title' object (for logo and caption), a 'UserIcon' (for a user avatar and menu), and a 'FooterSection' (for a sub-header or navigation bar). This provides a standardized way to build a feature-rich, top-level navigation and identity section for an application.
@@ -194,17 +261,27 @@ A comprehensive suite of server-side UI controls for rapid web page construction
 *   'skylite.WebCore.FileHandler': A utility for interacting with the server's file system. Key methods include writing/reading binary data ('WriteByteToFile', 'ReadByteFromFile'), serializing/deserializing objects to files ('WriteObjectToFile', 'ReadObjectFromFile'), searching for files ('GetDirectoryFiles', 'SearchFiles'), and creating ZIP archives ('CreateZipFromDir').
 *   'skylite.WebCore.ImageHandler': A utility for server-side image manipulation, encapsulating 'System.Drawing'. Key methods include resizing ('ResizeImageW', 'ResizeImageH'), rotation ('RotateImage'), and Base64 conversion ('ImageBase64') for embedding images in HTML or JSON.
 *   'skylite.WebCore.XmlTool & skylite.XmlHandler': A pair of utilities for handling XML. 'XmlTool' is for simple, one-off value extraction from XML strings ('GetElementValueFromXml'). 'XmlHandler' is a more advanced, object-oriented parser for deconstructing, programmatically modifying, and reconstructing complex XML documents.
-*   'skylite.WebPage.Translator': A powerful, built-in utility for handling multi-language text translation. It manages a dictionary of translatable terms ('DicKey', 'DicWord', 'IsoCode') and uses the main 'Translate(key)' method to return the appropriate text for the active language. It's typically accessed via a property on the 'WebPage' instance (e.g., 'HtmlTranslator') and used during 'OnInitialized' to populate UI control properties like labels and titles (e.g., 'myControl.Label.InnerText = HtmlTranslator.Translate("LBL_USERNAME")'), enabling a single codebase to support multiple languages.
+*   'skylite.WebPage.Translator': A powerful, built-in utility for handling multi-language text translation. It is accessed via the 'Translator' property on the 'WebPage' instance. Use the 'Translator.Format("key")' method to return the appropriate text for the active language. This is typically used during 'OnInitialized' to populate UI control properties like labels and titles (e.g., \\\`Dim myText as New Texts(Translator.Format("LBL_USERNAME"), ...)\\\`), enabling a single codebase to support multiple languages.
 *   'skylite.DynamicModel': A specialized "expando" object that inherits from 'System.Dynamic.DynamicObject'. It allows for creating objects with properties defined at runtime (e.g., 'myModel.NewProperty = "value"'). It is backed by a public 'data As Dictionary(Of String, Object)' property and overrides 'TryGetMember' and 'TrySetMember' to enable dynamic property access. It also exposes a 'Count' property to get the number of members. It is ideal for handling data with a dynamic or unknown schema, such as a row from a database query, providing a cleaner syntax than directly using a dictionary.
 *   'skylite.Mail & skylite.MailInfo': A complete system for sending emails via SMTP. 'MailInfo' is a data object used to configure the SMTP server settings (Server, Port, SenderId, SenderPwd, etc.). The main 'Mail' class is the worker that sends the email; it is initialized with a 'MailInfo' object, has properties for recipients ('ToAddr'), subject ('Subject'), and content ('Body'), and uses the 'SendMail()' method to perform the action. This system separates server configuration from the sending of individual messages.
 *   'skylite.MathEval': A specialized utility to evaluate mathematical expressions provided as a string ('DoMath(formulaString)'). It is useful when formulas are stored dynamically and need to be evaluated at runtime.
----
 
-**Core Page Creation Patterns:**
+**4. HTML Attribute, Style, & Constant Manipulation**
+To ensure type safety and prevent errors from "magic strings", you MUST use the framework's built-in constant structures for all HTML tags, attributes, events, and styles. This is a mandatory convention.
 
-1.  'Hybrid Model': A static '.html' file (e.g., 'MyPage.html') provides the base layout. The corresponding server-side class (e.g., 'MyPage.cs') uses 'OnInitialized()' to programmatically add dynamic 'skylite.ToolKit' controls to this existing structure.
-2.  'Pure Server-Side Model': No separate '.html' file is used. The entire page body is constructed programmatically in 'OnInitialized()' using 'skylite.ToolKit' controls, and the final result is assigned to 'HtmlDoc.HtmlBodyText'.
-3.  'Server-Side Template Model': An '.html' file with placeholders is read on the server using 'ReadHtmlFile("MyPage")'. The server code replaces the placeholders and assigns the final string to 'HtmlDoc.HtmlBodyText'.
+*   **Constant Structures:**
+    *   **\\\`HtmlTags\\\`**: For all HTML tag names (e.g., \\\`HtmlTags.div\\\`).
+    *   **\\\`HtmlAttributes\\\`**: For all HTML attribute names.
+    *   **\\\`HtmlEvents\\\`**: For all JavaScript event handler names.
+    *   **\\\`HtmlStyles\\\`**: For all inline CSS property names.
+    *   **\\\`InputTypes\\\`**: A structure containing string constants for the \\\`type\\\` attribute of a generic \\\`<input>\\\` element.
+    *   **\\\`TextTypes\\\`**: A structure containing string constants for the type of the 'skylite.ToolKit.Texts' control. Examples: 'TextTypes.text', 'TextTypes.password', 'TextTypes.date', 'TextTypes.email'.
+
+*   **Attribute & Style Setting Methods (The ONLY Correct Way):**
+    *   **\\\`SetAttribute(attribute, value)\\\`:** Use for setting a single attribute. Example: \\\`myButton.SetAttribute(HtmlAttributes.class, "submit-btn")\\\`. Example: \\\`myButton.SetAttribute(HtmlEvents.onclick, "submitForm()")\\\`.
+    *   **\\\`SetStyle(style, value)\\\`:** Use for setting a single inline CSS style. Example: \\\`myContainer.SetStyle(HtmlStyles.backgroundColor, "#f0f0f0")\\\`.
+    *   **\\\`SetAttributes(Dictionary(Of String, String))\\\`:** Use for setting multiple attributes at once.
+    *   **\\\`SetStyles(Dictionary(Of String, String))\\\`:** Use for setting multiple styles at once.
 
 ---
 **Client-Server Interaction: The '$ApiRequest' / 'ApiResponse' Bridge**
@@ -214,11 +291,22 @@ This is the **ONLY** pattern for asynchronous communication. It creates a seamle
 **1. The Client-Side Initiator: '$ApiRequest'**
 This is a built-in JavaScript function that handles all AJAX complexity. It's called from a wrapper JS function, which is triggered by an HTML event handler (e.g., 'onclick="saveProfile()"').
 
+**CRITICAL USAGE PATTERN:** You **MUST NOT** call '$ApiRequest' directly from an HTML event attribute. Instead, the event attribute must call a JavaScript wrapper function, and that function will then execute '$ApiRequest'.
+*   **Correct:**
+    *   '.NET Code': \`myButton.SetAttribute(HtmlEvents.onclick, "GoHome()")\`
+    *   'JavaScript Code (in page-specific .js file)':
+        \`\`\`javascript
+        function GoHome() {
+          $ApiRequest('GoHome'); // No data payload in this example
+        }
+        \`\`\`
+*   **Incorrect:** \`myButton.SetAttribute(HtmlEvents.onclick, "$ApiRequest('GoHome')")\`
+
 *   'Syntax': '$ApiRequest(targetFunction, data, successCallback, errorCallback);'
 *   ''targetFunction' (String | this)': Specifies the server-side function. Use a string for explicit mapping (e.g., ''UpdateProfile'') or 'this' for implicit mapping from a named JS function. If there is no payload, it can be used as '$ApiRequest();'
 *   ''data' (JSON String)': The payload. MUST be a JSON-stringified array of key-value objects: 'JSON.stringify([{ key: 'keyName', vlu: 'value' }])'. The server retrieves this with 'GetDataValue("keyName")'.
-*   ''successCallback' (Function)': Optional. A JS function executed *after* the server's 'ApiResponse' commands are finished. Ideal for client-side cleanup like re-enabling a button.
-*   ''errorCallback' (Function)': Optional. A JS function executed if the request fails. Ideal for showing an error and re-enabling UI elements.
+*   ''successCallback' (Function)': Optional. A callback executed after the 'ApiResponse' commands complete. Has a built-in default handler; only provide a custom function for special cases like UI cleanup.
+*   ''errorCallback' (Function)': Optional. A callback executed if the request fails. Has a built-in error display handler; only provide a custom function for special cases.
 
 **2. The Server-Side Command Center: 'ApiResponse'**
 This is the required return type for any function called by '$ApiRequest'. It acts as a powerful "command container" that instructs the client what to do. The pattern is always: Instantiate, Populate, and Return.
@@ -239,7 +327,8 @@ This is the required return type for any function called by '$ApiRequest'. It ac
         *   '.SetElementContentsByName(name, html)': Sets the inner HTML content for ALL elements sharing the same 'name'. Ideal for bulk content updates, like revealing answers in multiple places or updating several status panels at once.
         *   '.AddElementContentsByName(name, html)': Appends HTML to the content of ALL elements sharing the same 'name'. The "append" counterpart to 'SetElementContentsByName', useful for bulk-append operations like adding a new log entry to multiple displays simultaneously.
         *   '.RemoveElementContentsByName(name)': Empties the inner HTML of ALL elements sharing the same 'name'. Great for bulk-clearing, like resetting all validation errors in a form.
-        *   '.SetElementValueByName(name, val)': Sets the 'value' for ALL elements sharing the same 'name' attribute. Ideal for resetting or populating a group of related inputs.
+        *   '.SetElementValueByName(name, val)': Sets the 'value' for ALL elements sharing the same 'name' attribute. Ideal for resetting or
+-populating a group of related inputs.
         *   '.SetElementAttributeByName(name, attr, val)': Sets an attribute for ALL elements sharing the same 'name'. Perfect for bulk actions like a "Select All" on checkbox groups.
         *   '.RemoveElementAttributeByName(name, attr)': Removes an attribute from ALL elements sharing the same 'name'. The direct counterpart, ideal for "Deselect All" or re-enabling a group of inputs.
         *   '.SetElementStyleByName(name, style, val)': Modifies a CSS style for ALL elements sharing the same 'name'. Ideal for bulk visual feedback, like changing the border color of all invalid fields in a form.
@@ -294,24 +383,30 @@ This is the required return type for any function called by '$ApiRequest'. It ac
 *   **JAVASCRIPT'S ROLE IS LIMITED:** Client-side JavaScript functions should ONLY be used as wrappers for '$ApiRequest'. Their only purpose is to:
     1.  Gather data for the request.
     2.  Manage UI state during the request (e.g., disabling a button before the call).
-    3.  Handle completion via 'successCallback' and 'errorCallback' (e.g., re-enabling the button).
+    3.  Optionally handle completion states using 'successCallback' and 'errorCallback' for special cases, like re-enabling a button. The system provides default handlers.
     You must **NEVER** use JavaScript for direct DOM manipulation (e.g., setting an element's text content after a successful call). That is the exclusive job of the 'ApiResponse'.
 *   **NO RAW HTML IN .NET:** Do not write HTML tags directly in C# or VB.NET code for dynamic elements. Generate all dynamic UI from 'skylite.ToolKit' controls.
 *   **NO MIXED SYNTAX:** Your response must be pure, clean code in the requested language (C# or VB.NET) within Markdown blocks.
+*   **PUBLIC ONINITIALIZED:** The \\\`OnInitialized()\\\` method MUST always be declared as \\\`public\\\` (e.g., \\\`public override void OnInitialized()\\\` in C# or \\\`Public Overrides Sub OnInitialized()\\\` in VB.NET). It must never be \\\`protected\\\`.
+*   **GLOBAL NAMESPACE:** All generated WebPage classes (e.g., 'public class MyPage : skylite.WebPage') must be declared in the global namespace. DO NOT wrap them in a 'namespace { ... }' block.
 
 Your task is to take the user's request and translate it into a perfect, production-ready SkyLite code solution that follows these rules with extreme precision.`;
     
     let contents: any = prompt;
-    if (uploadedImage) {
-      const imagePart = { inlineData: { mimeType: uploadedImage.mimeType, data: uploadedImage.data } };
-      const textPart = { text: prompt };
-      contents = { parts: [textPart, imagePart] };
+    if (uploadedFiles.length > 0) {
+      const contentParts: any[] = [{ text: prompt }];
+      uploadedFiles.forEach(file => {
+          contentParts.push({
+            inlineData: { mimeType: file.mimeType, data: file.data },
+          });
+      });
+      contents = { parts: contentParts };
     }
 
 
     // Use the streaming model for real-time feedback
     const response = await ai.models.generateContentStream({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       contents: contents,
       config: {
         systemInstruction: systemInstruction,
@@ -341,34 +436,34 @@ Your task is to take the user's request and translate it into a perfect, product
 // --- Event Listeners ---
 generateButton.addEventListener('click', generateCode);
 attachFileButton.addEventListener('click', () => fileInput.click());
-clearImageButton.addEventListener('click', () => {
-    uploadedImage = null;
-    fileInput.value = '';
-    imagePreviewContainer.hidden = true;
-    attachFileButton.hidden = false;
-});
-
 
 fileInput.addEventListener('change', async (event) => {
     const target = event.target as HTMLInputElement;
-    const file = target.files?.[0];
-    if (file) {
-        try {
-            setLoading(true);
+    const files = target.files;
+    if (!files || files.length === 0) {
+        return;
+    }
+
+    setLoading(true);
+    try {
+        for (const file of Array.from(files)) {
+            // Skip unsupported file types
+            if (!file.type.startsWith('image/') && !file.type.startsWith('text/')) {
+                console.warn(`Skipping unsupported file type: ${file.name} (${file.type})`);
+                continue;
+            }
+
             const part = await fileToGenerativePart(file);
-            uploadedImage = part;
-            imagePreview.src = `data:${part.mimeType};base64,${part.data}`;
-            imagePreviewContainer.hidden = false;
-            attachFileButton.hidden = true;
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-            displayError(`Error processing file: ${errorMessage}`);
-            uploadedImage = null;
-            imagePreviewContainer.hidden = true;
-            attachFileButton.hidden = false;
-        } finally {
-            setLoading(false);
+            uploadedFiles.push({ ...part, name: file.name });
         }
+        renderFilePreviews();
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+        displayError(`Error processing files: ${errorMessage}`);
+    } finally {
+        // Reset the input value to allow selecting the same file again
+        fileInput.value = '';
+        setLoading(false);
     }
 });
 
