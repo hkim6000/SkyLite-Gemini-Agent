@@ -18,3 +18,20 @@ View your app in AI Studio: https://ai.studio/apps/drive/1eXE5ZQvXwlQOkqCCa6Oote
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+
+
+SKYLITE framework
+Platform: IIS / .Net framework 4.5 +
+
+SKYNET framework
+Platform: ASP.NET Core / .NET 10
+Architecture: Middleware-based
+
+Technical Documents : https://www.theskylite.com/document
+
+Showcase Demo. Site: https://www.theskylite.com/SkyLiteProject
+
+Download GitHub: https://github.com/hkim6000/SkyNetDemo-AspNetCore
+
+support: hkim6000@gmail.com
