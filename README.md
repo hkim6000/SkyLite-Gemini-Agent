@@ -33,5 +33,4 @@ Technical Documents : https://www.theskylite.com/document
 Showcase Demo. Site: https://www.theskylite.com/SkyLiteProject
 
 Download GitHub: https://github.com/hkim6000/SkyNetDemo-AspNetCore
-
-support: hkim6000@gmail.com
+ 
